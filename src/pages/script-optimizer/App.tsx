@@ -6,7 +6,7 @@ import {
   User, Box, Map, RefreshCw, Settings, Sliders, Download, Edit2, Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Project, Chapter, STYLES, Asset, AppConfig, StyleOption } from './types';
+import { Project, Chapter, STYLES, Asset, AppConfig, StyleOption, PromptTemplate } from './types';
 import { 
   getSystemInstruction, 
   getAssetExtractionInstruction,
@@ -16,6 +16,156 @@ import {
 import { Link } from 'react-router-dom';
 
 const API_KEY = process.env.GEMINI_API_KEY;
+
+const TemplateManager = ({
+  title,
+  icon: Icon,
+  iconColor,
+  value,
+  onChange,
+  templates = [],
+  activeTemplateId,
+  onTemplatesChange,
+  onActiveTemplateIdChange,
+  defaultTemplateContent,
+  placeholderText,
+  heightClass = "h-48"
+}: {
+  title: string;
+  icon: any;
+  iconColor: string;
+  value: string;
+  onChange: (val: string) => void;
+  templates?: PromptTemplate[];
+  activeTemplateId?: string;
+  onTemplatesChange: (templates: PromptTemplate[]) => void;
+  onActiveTemplateIdChange: (id: string | undefined) => void;
+  defaultTemplateContent: string;
+  placeholderText?: string;
+  heightClass?: string;
+}) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+
+  const handleSaveAsNew = () => {
+    if (!newTemplateName.trim()) return;
+    const newTemplate: PromptTemplate = {
+      id: Date.now().toString(),
+      name: newTemplateName.trim(),
+      content: value,
+    };
+    onTemplatesChange([...templates, newTemplate]);
+    onActiveTemplateIdChange(newTemplate.id);
+    setIsEditingName(false);
+    setNewTemplateName('');
+  };
+
+  const handleUpdateCurrent = () => {
+    if (!activeTemplateId || activeTemplateId === 'default') return;
+    const updatedTemplates = templates.map(t => 
+      t.id === activeTemplateId ? { ...t, content: value } : t
+    );
+    onTemplatesChange(updatedTemplates);
+  };
+
+  const handleDeleteCurrent = () => {
+    if (!activeTemplateId || activeTemplateId === 'default') return;
+    const updatedTemplates = templates.filter(t => t.id !== activeTemplateId);
+    onTemplatesChange(updatedTemplates);
+    onActiveTemplateIdChange('default');
+    onChange(defaultTemplateContent);
+  };
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    onActiveTemplateIdChange(id);
+    if (id === 'default') {
+      onChange(defaultTemplateContent);
+    } else {
+      const t = templates.find(t => t.id === id);
+      if (t) onChange(t.content);
+    }
+  };
+
+  const isCustomSelected = activeTemplateId && activeTemplateId !== 'default';
+  const hasUnsavedChanges = isCustomSelected 
+    ? templates.find(t => t.id === activeTemplateId)?.content !== value
+    : defaultTemplateContent !== value;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <label className="text-sm font-black text-gray-700 flex items-center gap-2">
+          <Icon size={16} className={iconColor} />
+          {title}
+        </label>
+        
+        <div className="flex items-center gap-2">
+          <select 
+            value={activeTemplateId || 'default'}
+            onChange={handleSelectChange}
+            className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          >
+            <option value="default">默认模板</option>
+            {templates.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+
+          {isCustomSelected && (
+            <>
+              {hasUnsavedChanges && (
+                <button 
+                  onClick={handleUpdateCurrent}
+                  className="text-[10px] font-black text-emerald-600 hover:underline px-2 py-1 bg-emerald-50 rounded"
+                >
+                  保存修改
+                </button>
+              )}
+              <button 
+                onClick={handleDeleteCurrent}
+                className="text-[10px] font-black text-red-600 hover:underline px-2 py-1 bg-red-50 rounded"
+              >
+                删除
+              </button>
+            </>
+          )}
+          
+          {!isEditingName ? (
+            <button 
+              onClick={() => setIsEditingName(true)}
+              className="text-[10px] font-black text-blue-600 hover:underline px-2 py-1 bg-blue-50 rounded"
+            >
+              另存为新模板
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input 
+                type="text" 
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                placeholder="模板名称"
+                className="text-xs border border-gray-200 rounded px-2 py-1 w-24"
+                autoFocus
+              />
+              <button onClick={handleSaveAsNew} className="text-[10px] text-white bg-blue-600 px-2 py-1 rounded">保存</button>
+              <button onClick={() => setIsEditingName(false)} className="text-[10px] text-gray-500 px-2 py-1 rounded border">取消</button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full ${heightClass} bg-gray-50 border border-gray-100 rounded-[24px] p-6 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-xs font-mono leading-relaxed`}
+      />
+      {placeholderText && (
+        <p className="text-[10px] text-gray-400 font-bold px-2">{placeholderText}</p>
+      )}
+    </div>
+  );
+};
 
 export default function ScriptOptimizerApp() {
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -1252,70 +1402,60 @@ export default function ScriptOptimizerApp() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scrollbar">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-black text-gray-700 flex items-center gap-2">
-                        <Sparkles size={16} className="text-emerald-600" />
-                        1. 分镜提示词生成指令 (Storyboard Instruction)
-                      </label>
-                      <button 
-                        onClick={() => setConfig({...config, storyboardInstruction: DEFAULT_STORYBOARD_TEMPLATE})}
-                        className="text-[10px] font-black text-emerald-600 hover:underline"
-                      >
-                        恢复默认
-                      </button>
-                    </div>
-                    <textarea
-                      value={config.storyboardInstruction}
-                      onChange={(e) => setConfig({...config, storyboardInstruction: e.target.value})}
-                      className="w-full h-48 bg-gray-50 border border-gray-100 rounded-[24px] p-6 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-xs font-mono leading-relaxed"
-                    />
-                    <p className="text-[10px] text-gray-400 font-bold px-2">提示：使用 {"${style}"} 作为风格占位符</p>
-                  </div>
+                  <TemplateManager
+                    title="1. 分镜提示词生成指令 (Storyboard Instruction)"
+                    icon={Sparkles}
+                    iconColor="text-emerald-600"
+                    value={config.storyboardInstruction}
+                    onChange={(val) => setConfig(prev => ({...prev, storyboardInstruction: val}))}
+                    templates={config.storyboardTemplates}
+                    activeTemplateId={config.activeStoryboardTemplateId}
+                    onTemplatesChange={(templates) => setConfig(prev => ({...prev, storyboardTemplates: templates}))}
+                    onActiveTemplateIdChange={(id) => setConfig(prev => ({...prev, activeStoryboardTemplateId: id}))}
+                    defaultTemplateContent={DEFAULT_STORYBOARD_TEMPLATE}
+                    placeholderText='提示：使用 ${style} 作为风格占位符'
+                  />
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-black text-gray-700 flex items-center gap-2">
-                        <Library size={16} className="text-blue-600" />
-                        2. 资产提取与提示词生成指令 (Asset Extraction Instruction)
-                      </label>
-                      <button 
-                        onClick={() => setConfig({...config, assetExtractionInstruction: DEFAULT_ASSET_EXTRACTION_TEMPLATE})}
-                        className="text-[10px] font-black text-blue-600 hover:underline"
-                      >
-                        恢复默认
-                      </button>
-                    </div>
-                    <textarea
-                      value={config.assetExtractionInstruction}
-                      onChange={(e) => setConfig({...config, assetExtractionInstruction: e.target.value})}
-                      className="w-full h-48 bg-gray-50 border border-gray-100 rounded-[24px] p-6 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-xs font-mono leading-relaxed"
-                    />
-                  </div>
+                  <TemplateManager
+                    title="2. 资产提取与提示词生成指令 (Asset Extraction Instruction)"
+                    icon={Library}
+                    iconColor="text-blue-600"
+                    value={config.assetExtractionInstruction}
+                    onChange={(val) => setConfig(prev => ({...prev, assetExtractionInstruction: val}))}
+                    templates={config.assetExtractionTemplates}
+                    activeTemplateId={config.activeAssetExtractionTemplateId}
+                    onTemplatesChange={(templates) => setConfig(prev => ({...prev, assetExtractionTemplates: templates}))}
+                    onActiveTemplateIdChange={(id) => setConfig(prev => ({...prev, activeAssetExtractionTemplateId: id}))}
+                    defaultTemplateContent={DEFAULT_ASSET_EXTRACTION_TEMPLATE}
+                  />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <label className="text-sm font-black text-gray-700 flex items-center gap-2">
-                        <Box size={16} className="text-amber-600" />
-                        3. 预留：生图指令 (Image Gen)
-                      </label>
-                      <textarea
-                        value={config.imageGenInstruction}
-                        onChange={(e) => setConfig({...config, imageGenInstruction: e.target.value})}
-                        className="w-full h-32 bg-gray-50 border border-gray-100 rounded-[24px] p-6 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all text-xs font-mono leading-relaxed"
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <label className="text-sm font-black text-gray-700 flex items-center gap-2">
-                        <RefreshCw size={16} className="text-purple-600" />
-                        4. 预留：生视频指令 (Video Gen)
-                      </label>
-                      <textarea
-                        value={config.videoGenInstruction}
-                        onChange={(e) => setConfig({...config, videoGenInstruction: e.target.value})}
-                        className="w-full h-32 bg-gray-50 border border-gray-100 rounded-[24px] p-6 focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all text-xs font-mono leading-relaxed"
-                      />
-                    </div>
+                    <TemplateManager
+                      title="3. 预留：生图指令 (Image Gen)"
+                      icon={Box}
+                      iconColor="text-amber-600"
+                      value={config.imageGenInstruction}
+                      onChange={(val) => setConfig(prev => ({...prev, imageGenInstruction: val}))}
+                      templates={config.imageGenTemplates}
+                      activeTemplateId={config.activeImageGenTemplateId}
+                      onTemplatesChange={(templates) => setConfig(prev => ({...prev, imageGenTemplates: templates}))}
+                      onActiveTemplateIdChange={(id) => setConfig(prev => ({...prev, activeImageGenTemplateId: id}))}
+                      defaultTemplateContent={'3D render, C4D style, high-quality character portrait, white background...'}
+                      heightClass="h-32"
+                    />
+                    <TemplateManager
+                      title="4. 预留：生视频指令 (Video Gen)"
+                      icon={RefreshCw}
+                      iconColor="text-purple-600"
+                      value={config.videoGenInstruction}
+                      onChange={(val) => setConfig(prev => ({...prev, videoGenInstruction: val}))}
+                      templates={config.videoGenTemplates}
+                      activeTemplateId={config.activeVideoGenTemplateId}
+                      onTemplatesChange={(templates) => setConfig(prev => ({...prev, videoGenTemplates: templates}))}
+                      onActiveTemplateIdChange={(id) => setConfig(prev => ({...prev, activeVideoGenTemplateId: id}))}
+                      defaultTemplateContent={'Cinematic video, 4k, high detail, smooth motion...'}
+                      heightClass="h-32"
+                    />
                   </div>
                 </div>
 

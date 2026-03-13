@@ -7,6 +7,12 @@ export interface ModelSettings {
   baseUrl?: string;
 }
 
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  content: string;
+}
+
 export interface AppConfig {
   storyboardInstruction: string;
   assetExtractionInstruction: string;
@@ -14,6 +20,17 @@ export interface AppConfig {
   videoGenInstruction: string;
   selectedModel: ModelProvider;
   models: Record<ModelProvider, ModelSettings>;
+  
+  // Templates
+  storyboardTemplates?: PromptTemplate[];
+  assetExtractionTemplates?: PromptTemplate[];
+  imageGenTemplates?: PromptTemplate[];
+  videoGenTemplates?: PromptTemplate[];
+  
+  activeStoryboardTemplateId?: string;
+  activeAssetExtractionTemplateId?: string;
+  activeImageGenTemplateId?: string;
+  activeVideoGenTemplateId?: string;
 }
 
 export interface Asset {
