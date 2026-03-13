@@ -1,0 +1,5 @@
+{
+  "name": "App Dashboard",
+  "description": "A central portal to access and manage multiple web applications.",
+  "requestFramePermissions": []
+}
